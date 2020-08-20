@@ -12,7 +12,7 @@ from pprint import pprint
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 import re, json
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from keys import mailaddr, mailpassword
 from helloflask.emailing import send_email
 
@@ -455,12 +455,9 @@ def draw_table():
             col2key[jsonData['usercol_id']] = id
             i += 1
 
-
-    
     data_list = []
-    data = {}
-    
     date_list = []
+    data = {}
     for jsonData in log_jsonData_list:
         p = jsonData['usercol_id']
         q = jsonData['value']
@@ -516,6 +513,7 @@ def test():
 
 @app.route('/logs/r2', methods=["POST","GET"])
 def draw_graph():
+    # QQQ 환자는 docpat에서 여러 의사와 매칭이 되어 있을 수 있기 때문에, 그래프를 볼 수 없음..... 해결할 필요가 있음.
     pu = Pat_Usercol.query.filter(Pat_Usercol.doc_pat_id == ( Doc_Pat.query.filter(Doc_Pat.doc_id == 1, Doc_Pat.pat_id == 1).first().id) ).all()
     uc_list = []
     for u in pu:
@@ -527,32 +525,129 @@ def draw_graph():
     result = []
     key_list = []
 
+    # for log in log_list:
+    #     l = {}
+    #     l['data'] = [] 
+
+    #     if log.master.col_name not in key_list:
+    #         l['name'] = log.master.col_name
+    #         if log.master.col_name == "취침시간":
+    #             date_string = log.date.strftime('%Y-%m-%d')
+    #             date_string += (" " + log.value)
+    #             date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #             l['data'].append([(date_formatting.timestamp() * 1000) - 1, 0])
+    #             l['data'].append([date_formatting.timestamp() * 1000, 1])
+    #         elif log.master.col_name == "기상시간":
+    #             date_string = log.date.strftime('%Y-%m-%d')
+    #             date_string += (" " + log.value)
+    #             date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #             l['data'].append([date_formatting.timestamp() * 1000, 1])
+    #             l['data'].append([(date_formatting.timestamp() * 1000) + 1, 0])
+    #         else:
+    #             l['data'].append((log.date.timestamp() * 1000, int(log.value)))
+
+    #         key_list.append(log.master.col_name)
+    #         result.append(l)
+    #     else:
+    #         for r in result:
+    #             if r['name'] == log.master.col_name:
+    #                 if log.master.col_name == "취침시간":
+    #                     date_string = log.date.strftime('%Y-%m-%d')
+    #                     date_string += (" " + log.value)
+    #                     date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #                     r['data'].append([(date_formatting.timestamp() * 1000) - 1, 0])
+    #                     r['data'].append([date_formatting.timestamp() * 1000, 1])
+    #                 elif log.master.col_name == "기상시간":
+    #                     date_string = log.date.strftime('%Y-%m-%d')
+    #                     date_string += (" " + log.value)
+    #                     date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #                     r['data'].append([date_formatting.timestamp() * 1000, 1])
+    #                     r['data'].append([(date_formatting.timestamp() * 1000) + 1, 0])
+    #                 else:
+    #                     r['data'].append((log.date.timestamp() * 1000, int(log.value)))
+    #                 break
+
     for log in log_list:
         l = {}
-        l['data'] = [] 
-        if log.master.col_name == "기상시간":
-            continue
-        elif log.master.col_name == '취침시간':
+        l['data'] = []
+        if log.master.col_type == 4:
             continue
 
         if log.master.col_name not in key_list:
             l['name'] = log.master.col_name
-            l['data'].append([log.date.timestamp() * 1000, int(log.value)])
+            l['data'].append((log.date.timestamp() * 1000, int(log.value)))
             key_list.append(log.master.col_name)
             result.append(l)
         else:
             for r in result:
                 if r['name'] == log.master.col_name:
-                    r['data'].append([log.date.timestamp() * 1000, int(log.value)])
+                    r['data'].append((log.date.timestamp() * 1000, int(log.value)))
                     break
 
-    print("<<<<<<<<<<<<<<<<<<<<<<<<<", result, key_list)
+    # for log in log_list:
+    #     if log.master.col_type == 4:
+    #         if log.master.col_name == "기상시간":
+    #             date_string = log.date.strftime('%Y-%m-%d')
+    #             date_string += (" " + log.value)
+    #             date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #             l['data'].append([date_formatting.timestamp() * 1000, 1])
+    #             l['data'].append([(date_formatting.timestamp() * 1000) + 100, 0])
+    #         else:
+    #             date_string = log.date.strftime('%Y-%m-%d')
+    #             date_string += (" " + log.value)
+    #             date_formatting = datetime.strptime(date_string, "%Y-%m-%d %H:%M")
+    #             l['data'].append([(date_formatting.timestamp() * 1000) - 100, 0])
+    #             l['data'].append([date_formatting.timestamp() * 1000, 1])
+    #     else:
+    #         continue
+    # sort_dic = sorted(dic.items(), key=lambda d: d[0], reverse=True)
+    # sorted_sleep_time_list = sorted(enumerate(l['data']), key=lambda iter: iter[1][0])
+    # print("sorted_sleep_time_list >>>>>>>>>>>>>>> ", sorted_sleep_time_list)
+    # result.append(l)
+
+    wakeuptime_list = []
+    bedtime_list = []
+    for log in log_list:
+        if log.master.col_type == 4:
+            if log.master.col_name == "기상시간":
+                wakeuptime_list.append(log)
+            else:
+                bedtime_list.append(log)
+            
+    sleep_time_list = []
+    for wakeuptime in wakeuptime_list:
+        wd = wakeuptime.date
+        wv = wakeuptime.date.strftime('%Y-%m-%d') + " " + wakeuptime.value
+        for bedtime in bedtime_list:
+            bd = bedtime.date
+            if wd == bd:
+                bv = bedtime.date.strftime('%Y-%m-%d') + " " + bedtime.value
+                wvt = datetime.strptime(wv,  "%Y-%m-%d %H:%M").timestamp() * 1000
+                bvt = datetime.strptime(bv,  "%Y-%m-%d %H:%M").timestamp() * 1000
+                sub = (timedelta(days=1) * 1000).total_seconds()
+
+                if wvt < bvt:
+                    bvt -= sub
+
+                sleep_time_list.append((bvt - 1, 0))
+                sleep_time_list.append((bvt, 6))
+                sleep_time_list.append((wvt, 6))
+                sleep_time_list.append((wvt + 1, 0))
+                break
+    
+    sorted_sleep_time_list = sorted(sleep_time_list, key=lambda v: v[0])
+    l['name'] = "수면시간"
+    l['data'] = sorted_sleep_time_list
+    result.append(l)
+    print("sorted_sleep_time_list >>>>>>>>>>>>>>>>> ", sorted_sleep_time_list)
+
+    
+    
+
         
 
-
-    pprint(result)
-
-      
+    
+    ## l =  { data : [ ( 1, 1), (2, 2) ,,,, ] , name : .... }
 
     # ptu = Doc_Pat.query.filter(Doc_Pat.doc_id == session['loginUser']['userid']).filter(Doc_Pat.pat_id == 1).first()
     # log_list = Log.query.filter(Log.usercol_id.in_(uc_list)).all()    
